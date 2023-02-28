@@ -5,42 +5,21 @@ clear all
 % -------------------
 %   Class A
 nA = 200;
-classA = randn(nA,2);
 muA = [5, 10]';
 SA = [8, 0; 0, 4];
-%   Find eigenvectors and eigenvalues of covariance matrix SA
-[VA,DA] = eig(SA);
-lam1A = DA(1,1);
-lam2A = DA(2,2);
-projected_yA = VA(:,1);
-%   Find angle between principle axes and x-y axes
-y_axis = [0 1];
-cosThetaA = dot(projected_yA,y_axis)/(norm(projected_yA)*norm(y_axis));
-thetaA_deg = acosd(cosThetaA);
-thetaA = thetaA_deg*pi/180;
-% Perform transform on points to add desired covariance and mean
-classA = (classA*sqrtm(SA))' + muA;
+
+[classA, lam1A, lam2A, thetaA] = generateRandClassData(nA, muA, SA);
 
 %   Compare against MATLAB built in function
 testA = mvnrnd(muA, SA, nA);
 
 %   Class B
 nB = 200;
-classB = randn(nB, 2);
 muB = [10 15]';
 SB = [8 0; 0 4];
 
-% Find eigenvectors and eigenvalues of covariance matrix SB
-[VB,DB] = eig(SB);
-lam1B = DB(1,1);
-lam2B = DB(2,2);
-projected_yB = VB(:,1);
-% Find angle between principle axes and x-y axes
-y_axis = [0 1];
-cosThetaB = dot(projected_yB,y_axis)/(norm(projected_yB)*norm(y_axis));
-thetaB_deg = acosd(cosThetaB);
-thetaB = thetaB_deg*pi/180;
-classB = (classB*sqrtm(SB))' + muB;
+[classB, lam1B, lam2B, thetaB] = generateRandClassData(nB, muB, SB);
+
 % Compare against MATLAB built in function
 testB = mvnrnd(muB, SB, nB);
 
@@ -70,58 +49,31 @@ title('MATLAB Generated Gaussian Clusters')
 
 %   Class C
 nC = 100;
-classC = randn(nC,2);
 muC = [5, 10]';
 SC = [8, 4; 4, 40];
-%   Find eigenvectors and eigenvalues of covariance matrix SC
-[VC,DC] = eig(SC);
-lam1C = DC(1,1);
-lam2C = DC(2,2);
-projected_yC = VC(:,1);
-%   Find angle between principle axes and x-y axes
-y_axis = [0 1];
-cosThetaC = dot(projected_yC,y_axis)/(norm(projected_yC)*norm(y_axis));
-thetaC_deg = acosd(cosThetaC);
-thetaC = thetaC_deg*pi/180;
-classC = (classC*sqrtm(SC))' + muC;
+
+[classC, lam1C, lam2C, thetaC] = generateRandClassData(nC, muC, SC);
+
 %   Compare against MATLAB built in function
 testC = mvnrnd(muC, SC, nC);
 
 %   Class D
 nD = 200;
-classD = randn(nD,2);
 muD = [15, 10]';
 SD = [8, 0; 0, 8];
-%   Find eigenvectors and eigenvalues of covariance matrix SD
-[VD,DD] = eig(SD);
-lam1D = DD(1,1);
-lam2D = DD(2,2);
-projected_yD = VD(:,1);
-%   Find angle between principle axes and x-y axes
-y_axis = [0 1];
-cosThetaD = dot(projected_yD,y_axis)/(norm(projected_yD)*norm(y_axis));
-thetaD_deg = acosd(cosThetaD);
-thetaD = thetaD_deg*pi/180;
-classD = (classD*sqrtm(SD))' + muD;
+
+[classD, lam1D, lam2D, thetaD] = generateRandClassData(nD, muD, SD);
+
 %   Compare against MATLAB built in function
 testD = mvnrnd(muD, SD, nD);
 
 %   Class E
 nE = 150;
-classE = randn(nE,2);
 muE = [10, 5]';
 SE = [10, -5; -5, 20];
-%   Find eigenvectors and eigenvalues of covariance matrix SE
-[VE,DE] = eig(SE);
-lam1E = DE(1,1);
-lam2E = DE(2,2);
-projected_yE = VE(:,1);
-%   Find angle between principle axes and x-y axes
-y_axis = [0 1];
-cosThetaE = dot(projected_yE,y_axis)/(norm(projected_yE)*norm(y_axis));
-thetaE_deg = acosd(cosThetaE);
-thetaE = thetaE_deg*pi/180;
-classE = (classE*sqrtm(SE))' + muE;
+
+[classE, lam1E, lam2E, thetaE] = generateRandClassData(nE, muE, SE);
+
 %   Compare against MATLAB built in function
 testE = mvnrnd(muE, SE, nE);
 
@@ -263,10 +215,93 @@ legend('class C','unit SD C','class D','unit SD D','class E','unit SD E',...
     'NN DB','kNN DB', 'Location', 'Best')
 title('Classes C, D, & E NN and kNN Classifier Results')
 
+% AB confusion matrices for all classifiers
+% AB test samples
+[testClassA, testLam1A, testLam2A, testThetaA] = generateRandClassData(nA, muA, SA);
+[testClassB, testLam1B, testLam2B, testThetaB] = generateRandClassData(nB, muB, SB);
+x1vals_AB_test = [testClassA(1,:) testClassB(1,:)]';
+x2vals_AB_test = [testClassA(2,:) testClassB(2,:)]';
+
+figure;
+% MED
+pred = double(MEDclassifier(x1vals_AB, x2vals_AB, [muA'; muB']));
+[confusion_matrixMED, errorMED] = errors(pred, labels_AB, {'A', 'B'}, 'MED AB',[5 2 1])
+
+% MICD
+pred = double(MICD_classifier(x1vals_AB, x2vals_AB, [SA; SB], [muA'; muB']));
+[confusion_matrixMICD, errorMICD] = errors(pred, labels_AB, {'A', 'B'}, 'MICD AB',[5 2 3])
+
+% MAP
+pred = double(MAP_classifier(x1vals_AB, x2vals_AB, SA, SB, muA', muB', nA, nB));
+pred = pred + 1;
+[confusion_matrixMAP, errorMAP] = errors(pred, labels_AB, {'A', 'B'}, 'MAP AB',[5 2 5])
+
+% NN/KNN
+pred = double(kNN_classifier(1, x1vals_AB_test, x2vals_AB_test, x1vals_AB, x2vals_AB, labels_AB));
+[confusion_matrix1NN, error1NN] = errors(pred, labels_AB, {'A', 'B'}, '1NN AB',[5 2 7])
+pred = double(kNN_classifier(5, x1vals_AB_test, x2vals_AB_test, x1vals_AB, x2vals_AB, labels_AB));
+[confusion_matrix5NN, error5NN] = errors(pred, labels_AB, {'A', 'B'}, '5NN AB',[5 2 9])
+
+% CDE test samples
+[testClassC, testLam1C, testLam2C, testThetaC] = generateRandClassData(nC, muC, SC);
+[testClassD, testLam1D, testLam2D, testThetaD] = generateRandClassData(nD, muD, SD);
+[testClassE, testLam1E, testLam2E, testThetaE] = generateRandClassData(nE, muE, SE);
+x1vals_CDE_test = [testClassC(1,:) testClassD(1,:) testClassE(1,:)]';
+x2vals_CDE_test = [testClassC(2,:) testClassD(2,:) testClassE(2,:)]';
+
+% CDE confusion matrices for all classifiers
+% MED
+pred = double(MEDclassifier(x1vals_CDE, x2vals_CDE, [muC'; muD'; muE']));
+[confusion_matrixMED, errorMED] = errors(pred, labels_CDE, {'C', 'D', 'E'}, 'MED CDE',[5 2 2])
+
+%MICD
+pred = double(MICD_classifier(x1vals_CDE, x2vals_CDE, [SC; SD; SE], [muC'; muD'; muE']));
+[confusion_matrixMICD, errorMICD] = errors(pred, labels_CDE, {'C', 'D', 'E'}, 'MICD CDE',[5 2 4])
+
+% MAP
+classCD = MAP_classifier(x1vals_CDE, x2vals_CDE, SC, SD, muC', muD', nC, nD);
+classDE = MAP_classifier(x1vals_CDE, x2vals_CDE, SD, SE, muD', muE', nD, nE);
+classEC = MAP_classifier(x1vals_CDE, x2vals_CDE, SE, SC, muE', muC', nE, nC);
+pred = double(MAP_classifier_3_class(classCD, classDE, classEC));
+[confusion_matrixMAP, errorMAP] = errors(pred, labels_CDE, {'C', 'D', 'E'}, 'MAP CDE',[5 2 6])
+
+% NN/KNN
+pred = double(kNN_classifier(1, x1vals_CDE_test, x2vals_CDE_test, x1vals_CDE, x2vals_CDE, labels_CDE));
+[confusion_matrix1NN, error1NN] = errors(pred, labels_CDE, {'C', 'D', 'E'}, '1NN CDE',[5 2 8])
+pred = double(kNN_classifier(5, x1vals_CDE_test, x2vals_CDE_test, x1vals_CDE, x2vals_CDE, labels_CDE));
+[confusion_matrix5NN, error5NN] = errors(pred, labels_CDE, {'C', 'D', 'E'}, '5NN CDE',[5 2 10])
+
 
 % Functions
 % -------------------
-% Grid for classification boundaries
+
+% generate random class data
+function [classData, lam1X, lam2X, thetaX] = generateRandClassData(nX, muX, SX)
+    classX = randn(nX,2);
+    %   Find eigenvectors and eigenvalues of covariance matrix SA
+    [VX,DX] = eig(SX);
+    lam1X = DX(1,1);
+    lam2X = DX(2,2);
+    projected_yX = VX(:,1);
+    %   Find angle between principle axes and x-y axes
+    y_axis = [0 1];
+    cosThetaX = dot(projected_yX,y_axis)/(norm(projected_yX)*norm(y_axis));
+    thetaX_deg = acosd(cosThetaX);
+    thetaX = thetaX_deg*pi/180;
+    % Perform transform on points to add desired covariance and mean
+    classData = (classX*sqrtm(SX))' + muX;
+end
+
+% calculate error
+function [confusion_matrix, error] = errors(predicted, labels, classes, title, splot)
+    confusion_matrix = confusionmat(labels, predicted);
+    subplot(splot(1), splot(2), splot(3));
+    confusionchart(confusion_matrix, classes, 'Title', title);
+    sum_n = sum(confusion_matrix(:));
+    error = (sum_n - sum(diag(confusion_matrix))) / sum_n;
+end
+
+
 function [x1, x2] = make_grid(x1vals, x2vals, step)
     % Get original range of values
     x1min0 = min(x1vals(:));
@@ -385,7 +420,7 @@ function classes = kNN_classifier(k, x1_test, x2_test, x1_train, x2_train, label
     n_train = length(x1_train);
     dvecs = zeros(n_test, n_train, 3);
 
-    % Precompute all displacement vectors and scalar distances
+    % compute vectors and scalar distances
     for ii=1:n_test
         for jj=1:n_train
             dvec = [x1_test(ii) - x1_train(jj); x2_test(ii) - x2_train(jj)];
@@ -394,41 +429,32 @@ function classes = kNN_classifier(k, x1_test, x2_test, x1_train, x2_train, label
         end
     end
 
-    % For k == 1 simple min distance
+    % if k == 1 we just want the minimum distance (NN)
     if k == 1
         [~, idx] = min(dvecs(:, :, 3), [], 2);
         classes = labels(idx);
-    % For k > 1, take the sample mean of the nearest k samples in each
-    % class and find the minimum distance to the sample means
+    % For k > 1, calc the sample mean of the nearest k samples in each
+    % class and find the min distance
     else
         n_classes = max(labels(:));
         dists = zeros(n_test, n_classes);
         for ii = 1:n_test
-            % Disp. vectors from ii-th point to all training points
             pt_dvecs = squeeze(dvecs(ii, :, :));
             for cls = 1:n_classes
-                % Get indices for the class in question and select disp.
-                % vectors for that class
                 idx = labels == cls;
                 cls_dvecs = pt_dvecs(idx, :);
-
-                % Sort by scalar distance (3rd column)
                 cls_dvecs = sortrows(cls_dvecs, 3);
-
-                % Select first k vectors (excluding distance column)
                 cls_dvecs = cls_dvecs(1:k, 1:2);
 
-                % Compute mean disp. vector (the mean of the disp. vectors
-                % is the same as the disp. vector to the mean of the k
-                % vectors)
+                % calc mean displacement vector
                 mean_dvec = mean(cls_dvecs);
 
-                % Compute final squared distance for class cls
+                % calc final squared distance for the class
                 dists(ii, cls) = mean_dvec*mean_dvec';
             end
         end
 
-        % Predicted class is argmax of computed distances
+        % class is the minimum distance
         [~, classes] = min(dists, [], 2);
     end
-end
+end                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
