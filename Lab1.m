@@ -123,8 +123,8 @@ labels_CDE = [ones(nC, 1); 2*ones(nD, 1); 3*ones(nE, 1)];
 [x1_CDE, x2_CDE] = make_grid(x1vals_CDE, x2vals_CDE, grid_step);
 
 % MED Classifier
-grid_classes_AB_MED = reshape(MEDclassifier(x1_AB(:), x2_AB(:), [muA'; muB']), size(x1_AB));
-grid_classes_CDE_MED = reshape(MEDclassifier(x1_CDE(:), x2_CDE(:), [muC'; muD'; muE']), size(x1_CDE));
+grid_classes_AB_MED = reshape(MED_classifier(x1_AB(:), x2_AB(:), [muA'; muB']), size(x1_AB));
+grid_classes_CDE_MED = reshape(MED_classifier(x1_CDE(:), x2_CDE(:), [muC'; muD'; muE']), size(x1_CDE));
 
 % MICD Classifier
 grid_classes_AB_MICD = reshape(MICD_classifier(x1_AB(:), x2_AB(:), [SA; SB], [muA'; muB']), size(x1_AB));
@@ -224,7 +224,7 @@ x2vals_AB_test = [testClassA(2,:) testClassB(2,:)]';
 
 figure;
 % MED
-pred = double(MEDclassifier(x1vals_AB, x2vals_AB, [muA'; muB']));
+pred = double(MED_classifier(x1vals_AB, x2vals_AB, [muA'; muB']));
 [confusion_matrixMED, errorMED] = errors(pred, labels_AB, {'A', 'B'}, 'MED AB',[5 2 1])
 
 % MICD
@@ -251,7 +251,7 @@ x2vals_CDE_test = [testClassC(2,:) testClassD(2,:) testClassE(2,:)]';
 
 % CDE confusion matrices for all classifiers
 % MED
-pred = double(MEDclassifier(x1vals_CDE, x2vals_CDE, [muC'; muD'; muE']));
+pred = double(MED_classifier(x1vals_CDE, x2vals_CDE, [muC'; muD'; muE']));
 [confusion_matrixMED, errorMED] = errors(pred, labels_CDE, {'C', 'D', 'E'}, 'MED CDE',[5 2 2])
 
 %MICD
@@ -328,85 +328,88 @@ function [x1, x2] = make_grid(x1vals, x2vals, step)
 end
 
 % MED Classifier
-function classes = MEDclassifier(x1, x2, prototypes)
-    n_pts = length(x1);
-    n_protos = size(prototypes, 1);
-    dists = zeros(n_pts, n_protos);
+function classes = MED_classifier(x1, x2, prototypes)
+    num_samples = length(x1);
+    num_prototypes = size(prototypes, 1);
+    euc_distances = zeros(num_samples, num_prototypes);
 
-    % Compute Euclidian distances
-    for ii=1:n_pts
-        for jj=1:n_protos
-            dists(ii, jj) = (x1(ii) - prototypes(jj, 1))^2 + (x2(ii) - prototypes(jj, 2))^2;
+    % Calculate the Euclidian distances
+    for ii=1:num_samples
+        for jj=1:num_prototypes
+            euc_distances(ii, jj) = (x1(ii) - prototypes(jj, 1))^2 + (x2(ii) - prototypes(jj, 2))^2;
         end
     end
 
-    % Predicted class is argmin of computed distances (second returned
+    % Predicted class is the min of calculated distances (second returned
     % element of min function)
-    [~, classes] = min(dists, [], 2);
+    [~, classes] = min(euc_distances, [], 2);
 end
 
 
 % MICD (GED) Classifier
-function classes = MICD_classifier(x1, x2, sigmas, prototypes)
-    n_pts = length(x1);
-    n_prototypes = size(prototypes, 1);
-    dists = zeros(n_pts, n_prototypes);
+function classes = MICD_classifier(x1, x2, variances, prototypes)
+    num_samples = length(x1);
+    num_prototypes = size(prototypes, 1);
+    euc_distances = zeros(num_samples, num_prototypes);
 
-    % Precompute inverses
-    sigmas_inv = zeros(size(sigmas));
-    for jj=1:n_prototypes
-        sigma = sigmas((jj*2 - 1):jj*2, :);
-        sigmas_inv((jj*2 - 1):jj*2, :) = inv(sigma);
+    % Calculate the inverses in advance
+    variances_inv = zeros(size(variances));
+    for jj=1:num_prototypes
+        variance = variances((jj*2 - 1):jj*2, :);
+        variances_inv((jj*2 - 1):jj*2, :) = inv(variance);
     end
 
-    % Compute squared distances
-    for ii=1:n_pts
-        for jj=1:n_prototypes
-            sigma_inv = sigmas_inv((jj*2 - 1):jj*2, :);
-            vec = [x1(ii); x2(ii)];
-            dists(ii, jj) = (vec - prototypes(jj, :)')'*sigma_inv*(vec - prototypes(jj, :)');
+    % Calculate the Euclidian distances
+    for ii=1:num_samples
+        for jj=1:num_prototypes
+            variance_inv = variances_inv((jj*2 - 1):jj*2, :);
+            vector = [x1(ii); x2(ii)];
+            euc_distances(ii, jj) = (vector - prototypes(jj, :)')'*variance_inv*(vector - prototypes(jj, :)');
         end
     end
 
-    % Predicted class is argmax of computed distances
-    [~, classes] = min(dists, [], 2);
+    % Predicted class is the min of calculated distances (second returned
+    % element of min function)
+    [~, classes] = min(euc_distances, [], 2);
 end
 
 
 % MAP Classifier
-function classes = MAP_classifier(x1, x2, sigma1, sigma2, mean1, mean2, n1, n2)
-    n_pts = size(x1, 1);
-    dists = zeros(n_pts, 1);
+function classes = MAP_classifier(x1, x2, variance1, variance2, mean1, mean2, n1, n2)
+    num_samples = size(x1, 1);
+    euc_distances = zeros(num_samples, 1);
 
-    % Compute coefficients
-    Q0 = inv(sigma1) - inv(sigma2);
-    Q1 = 2*(mean2*inv(sigma2) - mean1*inv(sigma1));
-    Q2 = mean1*inv(sigma1)*mean1' - mean2*inv(sigma2)*mean2';
+    % Calculate coefficients in advance
+    Q0 = inv(variance1) - inv(variance2);
+    Q1 = 2*(mean2*inv(variance2) - mean1*inv(variance1));
+    Q2 = mean1*inv(variance1)*mean1' - mean2*inv(variance2)*mean2';
     Q3 = log(n2/n1);
-    Q4 = log(det(sigma1)/det(sigma2));
+    Q4 = log(det(variance1)/det(variance2));
 
-    % Compute discriminant function values
-    for ii = 1:n_pts
-       vec = [x1(ii), x2(ii)];
-       dists(ii) = vec*Q0*vec' + Q1*vec' + Q2 + 2*Q3 + Q4;
+    % Calculate the discriminant functions
+    for ii = 1:num_samples
+       vector = [x1(ii), x2(ii)];
+       euc_distances(ii) = vector*Q0*vector' + Q1*vector' + Q2 + 2*Q3 + Q4;
     end
-    classes = dists > 0;
+    classes = euc_distances > 0;
 end
 
 
 % MAP classifier with 3 classes
 function classes = MAP_classifier_3_class(classCD, classDE, classEC)
-    c = 1; d = 2; e = 3;
+    % giving a numerical code for each class
+    class_c = 1; class_d = 2; class_e = 3;
     classes = zeros(size(classCD));
 
-    % Combined predictions from three discriminate functions
+    % Using the predictions from all of the discriminant functions
+    % to determine which class is optimal
     for ii=1:size(classCD)
         if classCD(ii) && ~classDE(ii)
-            classes(ii) = d;
+            classes(ii) = class_d;
         elseif ~classCD(ii) && classEC(ii)
-            classes(ii) = c;
+            classes(ii) = class_c;
         elseif classDE(ii) && ~classEC(ii)
-            classes(ii) = e;
+            classes(ii) = class_e;
         else
             disp('Invalid inputs');
         end
@@ -415,46 +418,48 @@ end
 
 
 % kNN Classifier
+% note: setup the kNN class allows for function to act as a NN classifier
+% by choosing k = 1
 function classes = kNN_classifier(k, x1_test, x2_test, x1_train, x2_train, labels)
-    n_test = length(x1_test);
-    n_train = length(x1_train);
-    dvecs = zeros(n_test, n_train, 3);
+    num_train_samples = length(x1_train);
+    num_test_samples = length(x1_test);
+    distance_vectors = zeros(num_test_samples, num_train_samples, 3);
 
-    % compute vectors and scalar distances
-    for ii=1:n_test
-        for jj=1:n_train
-            dvec = [x1_test(ii) - x1_train(jj); x2_test(ii) - x2_train(jj)];
-            dvecs(ii, jj, 1:2) = dvec';
-            dvecs(ii, jj, 3) = dvec'*dvec;
+    % Calculate the vectors and scalar distances
+    for ii=1:num_test_samples
+        for jj=1:num_train_samples
+            distance_vector = [x1_test(ii) - x1_train(jj); x2_test(ii) - x2_train(jj)];
+            distance_vectors(ii, jj, 1:2) = distance_vector';
+            % scalar distance
+            distance_vectors(ii, jj, 3) = distance_vector'*distance_vector;
         end
     end
 
-    % if k == 1 we just want the minimum distance (NN)
+    % handling NN classifier functionality
     if k == 1
-        [~, idx] = min(dvecs(:, :, 3), [], 2);
-        classes = labels(idx);
-    % For k > 1, calc the sample mean of the nearest k samples in each
-    % class and find the min distance
+        [~, index] = min(distance_vectors(:, :, 3), [], 2);
+        classes = labels(index);
+
+    % handling kNN classifier functionality
     else
-        n_classes = max(labels(:));
-        dists = zeros(n_test, n_classes);
-        for ii = 1:n_test
-            pt_dvecs = squeeze(dvecs(ii, :, :));
-            for cls = 1:n_classes
-                idx = labels == cls;
-                cls_dvecs = pt_dvecs(idx, :);
-                cls_dvecs = sortrows(cls_dvecs, 3);
-                cls_dvecs = cls_dvecs(1:k, 1:2);
+        num_classes = max(labels(:));
+        euc_distances = zeros(num_test_samples, num_classes);
+        for ii = 1:num_test_samples
+            point_distance_vectors = squeeze(distance_vectors(ii, :, :));
+            for class = 1:num_classes
+                index = labels == class;
+                class_distance_vectors = point_distance_vectors(index, :);
+                class_distance_vectors = sortrows(class_distance_vectors, 3);
+                class_distance_vectors = class_distance_vectors(1:k, 1:2);
 
-                % calc mean displacement vector
-                mean_dvec = mean(cls_dvecs);
-
+                % calculate the average distance vector
+                distance_vector_avg = mean(class_distance_vectors);
                 % calc final squared distance for the class
-                dists(ii, cls) = mean_dvec*mean_dvec';
+                euc_distances(ii, class) = distance_vector_avg*distance_vector_avg';
             end
         end
 
         % class is the minimum distance
-        [~, classes] = min(dists, [], 2);
+        [~, classes] = min(euc_distances, [], 2);
     end
-end                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
+end                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
